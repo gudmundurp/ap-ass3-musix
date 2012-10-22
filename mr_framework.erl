@@ -22,7 +22,10 @@ job(CPid, MapFun, RedFun, RedInit, Data) -> ....
 %%%% Internal implementation
 
 
-init(N) -> ....
+init(N) ->
+    Pid = spawn(mr, reducer_loop, []);
+    spawn(fun() -> mapper_loop(Pid,
+	%% Feed mapper loop
 
 
 %% synchronous communication
@@ -85,17 +88,29 @@ send_loop(Mappers, [], Data) ->
 
 %%% Reducer
 
+process_list(L) ->
+    case L of
+	        [] ->
+			    ok;
+		    [{Key,Value} | Tail] ->
+		        GatherID ! {Key,Value};
+			    process_list_from_mapper(Tail);
+	end.
+
 reducer_loop() ->
     receive
 	stop -> 
 	    io:format("Reducer ~p stopping~n", [self()]),
 	    ok;
-        ....
+    L ->
+	    process_list(L);
+		reducer_loop()
     end.
 
 gather_data_from_mappers(Fun, Acc, Missing) ->
     receive
-	...
+	    {Key, Value} ->
+		    Fun(Acc,Key,Value)
     end.
 
 
@@ -106,7 +121,9 @@ mapper_loop(Reducer, Fun) ->
 	stop -> 
 	    io:format("Mapper ~p stopping~n", [self()]),
 	    ok;
-	....
+	{ Key, Value } ->
+	    Reducer ! Fun(Key, Value),
+		mapper_loop(Reducer,Fun);
 	Unknown ->
 	    io:format("unknown message: ~p~n",[Unknown]), 
 	    mapper_loop(Reducer, Fun)
