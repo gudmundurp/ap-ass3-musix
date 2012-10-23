@@ -123,7 +123,7 @@ mapper_loop(Reducer, Fun) ->
 	    ok;
 	{ Key, Value } ->
 	    Reducer ! Fun(Key, Value),
-		mapper_loop(Reducer,Fun);
+	    mapper_loop(Reducer,Fun);
 	Unknown ->
 	    io:format("unknown message: ~p~n",[Unknown]), 
 	    mapper_loop(Reducer, Fun)
