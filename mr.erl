@@ -3,7 +3,7 @@
 %%% @copyright (C) 2011, Ken Friis Larsen
 %%% Created : Oct 2011 by Ken Friis Larsen <kflarsen@diku.dk>
 %%%-------------------------------------------------------------------
--module(mr_framework).
+-module(mr).
 
 -export([start/1, stop/1, job/5]).
 
@@ -147,3 +147,18 @@ mapper_loop(Reducer, Fun) ->
         io:format("unknown message: ~p~n",[Unknown]), 
         mapper_loop(Reducer, Fun)
     end.
+
+test_sum() ->
+{ok, MR} = mr:start(3),
+{ok, Sum} = mr:job(MR,
+fun(X) -> X end,
+fun(X,Acc) -> X+Acc end,
+0,
+lists:seq(1,10)),
+{ok, Fac} = mr:job(MR,
+fun(X) -> X end,
+fun(X,Acc) -> X*Acc end,
+1,
+lists:seq(1,10)),
+mr:stop(MR),
+{Sum, Fac}.
