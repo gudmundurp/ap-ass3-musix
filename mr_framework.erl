@@ -39,8 +39,8 @@ spawn_mappers(N, Reducer) ->
 rpc(Pid, Request) ->
     Pid ! {self(), Request},
     receive
-	{Pid, Response} ->
-	    Response
+    {Pid, Response} ->
+        Response
     end.
 
 reply(From, Msg) ->
@@ -72,24 +72,22 @@ setup_async(Pid, Fun) ->
 
 coordinator_loop(Reducer, Mappers) ->
     receive
-	{From, stop} ->
-	    io:format("~p stopping~n", [self()]),
-	    lists:foreach(fun stop_async/1, Mappers),
-	    stop_async(Reducer),
-	    reply_ok(From);
-	{MapFun, RedFun, RedInit, Data, job} ->
-            Reducer ! { RedFun, RedInit, Mappers, start_gathering },
+    {From, stop} ->
+        io:format("~p stopping~n", [self()]),
+        lists:foreach(fun stop_async/1, Mappers),
+        stop_async(Reducer),
+        reply_ok(From);
+    {MapFun, RedFun, RedInit, Data, job} ->
+            rpc(Reducer,{ RedFun, RedInit, Mappers}),
             foreach(fun(M) ->
-	        M ! { MapFun, function },
-		Mappers
+            M ! { MapFun, function },
+                Mappers
             ),
-	    send_data(Mappers, Data),
-	    coordinator_loop(Reducer, Mappers);
-	{Result, result} ->
-	    io:format("~p~n",Result),
-	    coordinator_loop(Reducer, Mappers);
-	{ From, ok } ->
-	    
+            send_data(Mappers, Data),
+            coordinator_loop(Reducer, Mappers);
+    {Result, result} ->
+        io:format("~p~n",Result),
+        coordinator_loop(Reducer, Mappers);
     end.
 
 
@@ -115,25 +113,27 @@ process_list(L) ->
             process_list_from_mapper(Tail)
     end.
 
-reducer_loop(CId) ->
+reducer_loop() ->
     receive
-	stop -> 
-	    io:format("Reducer ~p stopping~n", [self()]),
-	    ok;
-	{RedFun,RedInit,start_gathering} ->
-	    Acc = gather_data_from_mappers(RedFun,RedInit,Mappers),
-	    Cid ! {Acc, result},
-	    ok;
+    stop -> 
+        io:format("Reducer ~p stopping~n", [self()]),
+        ok;
+    {Cid, {RedFun,RedInit,Mappers}} ->
+        reply_ok(Cid),
+        Acc = gather_data_from_mappers(RedFun,RedInit,Mappers),
+        reply(Cid,{Acc, result}),
+        reply(Cid,{self(), stop}),
+        ok;
     end.
 
 gather_data_from_mappers(Fun, Acc, [M|Tail]) ->
     receive
         {data, endOfData} ->
-	    io:format("Finish gathering data",[]),
+            io:format("Finish gathering data",[]),
             Acc;
-	{data, D} ->
-            Acc = Fun(B,Acc),
-	    gather_data_from_mappers(Fun,Acc,Missing)
+        {data, D} ->
+            Acc = Fun(D,Acc),
+            gather_data_from_mappers(Fun,Acc,Missing)
     end.
 
 
@@ -141,15 +141,15 @@ gather_data_from_mappers(Fun, Acc, [M|Tail]) ->
 
 mapper_loop(Reducer, Fun) ->
     receive
-	stop -> 
-	    io:format("Mapper ~p stopping~n", [self()]),
-	    ok;
-	{data, D } ->
-	    Reducer ! {data, Fun(D)},
-	    mapper_loop(Reducer,Fun);
-	{ F, function } ->
-	    mapper_loop(Reducer,F);
-	Unknown ->
-	    io:format("unknown message: ~p~n",[Unknown]), 
-	    mapper_loop(Reducer, Fun)
+    stop -> 
+        io:format("Mapper ~p stopping~n", [self()]),
+        ok;
+    {data, D } ->
+        Reducer ! {data, Fun(D)},
+        mapper_loop(Reducer,Fun);
+    { F, function } ->
+        mapper_loop(Reducer,F);
+    Unknown ->
+        io:format("unknown message: ~p~n",[Unknown]), 
+        mapper_loop(Reducer, Fun)
     end.
