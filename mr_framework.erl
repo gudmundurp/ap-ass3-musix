@@ -17,14 +17,16 @@ start(N) ->
 stop(Pid) -> 
     Pid ! {self(), stop}.
 
-job(CPid, MapFun, RedFun, RedInit, Data) -> ....
+job(CPid, MapFun, RedFun, RedInit, Data) ->
+    CPid ! {MapFun, RedFun, RedInit, Data, job}.
 
 
 %%%% Internal implementation
 
 init(N) -> 
     Reducer = spawn(fun() -> reducer_loop() end),
-    Mappers = spawn_mappers(N, Reducer).
+    Mappers = spawn_mappers(N, Reducer),
+    {Reducer,Mappers}.
 
 spawn_mappers(0, Reducer) ->
     [].
@@ -75,7 +77,14 @@ coordinator_loop(Reducer, Mappers) ->
 	    lists:foreach(fun stop_async/1, Mappers),
 	    stop_async(Reducer),
 	    reply_ok(From);
-	....
+	{MapFun, RedFun, RedInit, Data, job} ->
+            Reducer ! { RedFun, function },
+            Reducer ! { RedInit, initdata },
+            foreach(fun(M) ->
+	        M ! { MapFun, function },
+		Mappers
+            ),
+	    send_data(Mappers, Data).
     end.
 
 
@@ -125,9 +134,11 @@ mapper_loop(Reducer, Fun) ->
 	stop -> 
 	    io:format("Mapper ~p stopping~n", [self()]),
 	    ok;
-	{ Key, Value } ->
-	    Reducer ! Fun(Key, Value),
+	{data, D } ->
+	    Reducer ! Fun(D),
 	    mapper_loop(Reducer,Fun);
+	{ F, function } ->
+	    mapper_loop(Reducer,F);
 	Unknown ->
 	    io:format("unknown message: ~p~n",[Unknown]), 
 	    mapper_loop(Reducer, Fun)
