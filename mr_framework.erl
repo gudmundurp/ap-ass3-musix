@@ -14,7 +14,8 @@ start(N) ->
     {ok, spawn(fun() -> coordinator_loop(Reducer, Mappers) end)}.
 
 
-stop(Pid) -> ....
+stop(Pid) -> 
+    Pid ! {self(), stop}.
 
 job(CPid, MapFun, RedFun, RedInit, Data) -> ....
 
