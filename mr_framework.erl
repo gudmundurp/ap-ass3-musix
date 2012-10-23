@@ -18,21 +18,21 @@ stop(Pid) ->
     Pid ! {self(), stop}.
 
 job(CPid, MapFun, RedFun, RedInit, Data) ->
-    CPid ! {MapFun, RedFun, RedInit, Data, job}.
+    CPid ! {MapFun, RedFun, RedInit, Data ++ [endOfData], job}.
 
 
 %%%% Internal implementation
 
 init(N) -> 
     Reducer = spawn(fun() -> reducer_loop() end),
-    Mappers = spawn_mappers(N, Reducer),
+    Mappers = spawn_mappers(N, Reducer,[]),
     {Reducer,Mappers}.
 
-spawn_mappers(0, Reducer) ->
+spawn_mappers(0, Reducer,Mappers) ->
     [].
 spawn_mappers(N, Reducer) ->
     Pid = spawn(fun() -> mapper_loop(Reducer, fun(X) -> X end) end),
-    [Pid | spawn_mappers(N-1,Reducer)].
+    spawn_mappers(N-1,Reducer,[Pid | Mappers]).
 
 %% synchronous communication
 
@@ -78,7 +78,7 @@ coordinator_loop(Reducer, Mappers) ->
 	    stop_async(Reducer),
 	    reply_ok(From);
 	{MapFun, RedFun, RedInit, Data, job} ->
-            Reducer ! { RedFun, RedInit, start_gathering },
+            Reducer ! { RedFun, RedInit, Mappers, start_gathering },
             foreach(fun(M) ->
 	        M ! { MapFun, function },
 		Mappers
@@ -115,24 +115,25 @@ process_list(L) ->
             process_list_from_mapper(Tail)
     end.
 
-reducer_loop() ->
+reducer_loop(CId) ->
     receive
 	stop -> 
 	    io:format("Reducer ~p stopping~n", [self()]),
 	    ok;
 	{RedFun,RedInit,start_gathering} ->
-	    gather_data_from_mappers(RedFun,RedInit,RedInit).
-        {data, [{Key,Value} | Tail]} ->
-            reducer_loop();
-	{data, []} ->
-	    
-	    ok
+	    Acc = gather_data_from_mappers(RedFun,RedInit,Mappers),
+	    Cid ! {Acc, result},
+	    ok;
     end.
 
-gather_data_from_mappers(Fun, Acc, Missing) ->
+gather_data_from_mappers(Fun, Acc, [M|Tail]) ->
     receive
-	    {Key, Value} ->
-		    Fun(Acc,Key,Value)
+        {data, endOfData} ->
+	    io:format("Finish gathering data",[]),
+            Acc;
+	{data, D} ->
+            Acc = Fun(B,Acc),
+	    gather_data_from_mappers(Fun,Acc,Missing)
     end.
 
 
