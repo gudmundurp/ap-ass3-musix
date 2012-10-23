@@ -3,7 +3,7 @@
 %%% @copyright (C) 2011, Ken Friis Larsen
 %%% Created : Oct 2011 by Ken Friis Larsen <kflarsen@diku.dk>
 %%%-------------------------------------------------------------------
--module(mr).
+-module(mr_framework).
 
 -export([start/1, stop/1, job/5]).
 
@@ -21,12 +21,15 @@ job(CPid, MapFun, RedFun, RedInit, Data) -> ....
 
 %%%% Internal implementation
 
+init(N) -> 
+    Reducer = spawn(fun() -> reducer_loop() end),
+    Mappers = spawn_mappers(N, Reducer).
 
-init(N) ->
-    Pid = spawn(mr, reducer_loop, []);
-    spawn(fun() -> mapper_loop(Pid,
-	%% Feed mapper loop
-
+spawn_mappers(0, Reducer) ->
+    [].
+spawn_mappers(N, Reducer) ->
+    Pid = spawn(fun() -> mapper_loop(Reducer, fun(X) -> X end) end),
+    [Pid | spawn_mappers(N-1,Reducer)].
 
 %% synchronous communication
 
