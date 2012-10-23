@@ -28,9 +28,9 @@ init(N) ->
     Mappers = spawn_mappers(N, Reducer,[]),
     {Reducer,Mappers}.
 
-spawn_mappers(0, Reducer,Mappers) ->
-    [].
-spawn_mappers(N, Reducer) ->
+spawn_mappers(0, _, _) ->
+    [];
+spawn_mappers(N, Reducer, Mappers) ->
     Pid = spawn(fun() -> mapper_loop(Reducer, fun(X) -> X end) end),
     spawn_mappers(N-1,Reducer,[Pid | Mappers]).
 
@@ -70,6 +70,12 @@ setup_async(Pid, Fun) ->
 
 %%% Coordinator
 
+foreach(F, [H|T]) ->
+    F(H),
+    foreach(F, T);
+foreach(_, []) ->
+    ok.
+
 coordinator_loop(Reducer, Mappers) ->
     receive
     {From, stop} ->
@@ -79,15 +85,12 @@ coordinator_loop(Reducer, Mappers) ->
         reply_ok(From);
     {MapFun, RedFun, RedInit, Data, job} ->
             rpc(Reducer,{ RedFun, RedInit, Mappers}),
-            foreach(fun(M) ->
-            M ! { MapFun, function },
-                Mappers
-            ),
+            foreach(fun(M) -> M ! { MapFun, function } end, Mappers),
             send_data(Mappers, Data),
             coordinator_loop(Reducer, Mappers);
     {Result, result} ->
         io:format("~p~n",Result),
-        coordinator_loop(Reducer, Mappers);
+        coordinator_loop(Reducer, Mappers)
     end.
 
 
@@ -104,15 +107,6 @@ send_loop(Mappers, [], Data) ->
 
 %%% Reducer
 
-process_list(L) ->
-    case L of
-        [] ->
-            ok;
-        [{Key,Value} | Tail] ->
-            GatherID ! {Key,Value},
-            process_list_from_mapper(Tail)
-    end.
-
 reducer_loop() ->
     receive
     stop -> 
@@ -123,10 +117,10 @@ reducer_loop() ->
         Acc = gather_data_from_mappers(RedFun,RedInit,Mappers),
         reply(Cid,{Acc, result}),
         reply(Cid,{self(), stop}),
-        ok;
+        ok
     end.
 
-gather_data_from_mappers(Fun, Acc, [M|Tail]) ->
+gather_data_from_mappers(Fun, Acc, Missing) ->
     receive
         {data, endOfData} ->
             io:format("Finish gathering data",[]),
