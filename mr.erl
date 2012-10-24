@@ -19,7 +19,9 @@ stop(Pid) ->
 
 job(CPid, MapFun, RedFun, RedInit, Data) ->
     io:format("Starting job with data ~p~n", [Data]),
-    rpc(CPid,{MapFun, RedFun, RedInit, Data ++ [endOfData], job}).
+    Ans = rpc(CPid,{MapFun, RedFun, RedInit, Data ++ [endOfData], job}),
+    io:format("Got back answer: ~p~n",[Ans]),
+    Ans.
 
 
 %%%% Internal implementation
@@ -27,10 +29,11 @@ job(CPid, MapFun, RedFun, RedInit, Data) ->
 init(N) -> 
     Reducer = spawn(fun() -> reducer_loop() end),
     Mappers = spawn_mappers(N, Reducer,[]),
+    io:format("Ammount of Mappers is ~p and inside is ~p~n",[length(Mappers),Mappers]),
     {Reducer,Mappers}.
 
-spawn_mappers(0, _, _) ->
-    [];
+spawn_mappers(0, _, Mappers) ->
+    Mappers;
 spawn_mappers(N, Reducer, Mappers) ->
     Pid = spawn(fun() -> mapper_loop(Reducer, fun(X) -> X end) end),
     spawn_mappers(N-1,Reducer,[Pid | Mappers]).
@@ -102,16 +105,15 @@ coordinator_loop(Reducer, Mappers) ->
 send_data(Mappers, Data) ->
     io:format("Starting data send loop~n"),
     send_loop(Mappers, Mappers, Data).
-
 send_loop(Mappers, [Mid|Queue], [D|Data]) ->
-    io:format("Inside loop, head of data is ~p and rest is ~p~n",[D,Data]),
+    io:format("Inside loop, head of data is ~p and rest is ~p. Amount of mappers left is ~p~n",[D,Data,length(Queue)]),
     data_async(Mid, D),
     send_loop(Mappers, Queue, Data);
 send_loop(_, _, []) -> 
     io:format("End of data reached, hurray!~n"),
     ok;
 send_loop(Mappers, [], Data) ->
-    io:format("Refilling Mapper queue~n"),
+    io:format("Refilling Mapper queue, data is ~p, there are ~p mappers~n",[Data,length(Mappers)]),
     send_loop(Mappers, Mappers, Data).
 
 
@@ -126,6 +128,7 @@ reducer_loop() ->
     {Cid, {JPid,RedFun,RedInit,Mappers}} ->
         reply_ok(Cid),
         Acc = gather_data_from_mappers(RedFun,RedInit,Mappers),
+	io:format("Got back from gathering~n"),
         reply(Cid,{JPid, Acc, result}),
         reply(Cid,{self(), stop}),
         ok
@@ -135,11 +138,13 @@ gather_data_from_mappers(Fun, Acc, Missing) ->
     io:format("Reducer gathering data~n"),
     receive
         {data, endOfData} ->
-            io:format("Finish gathering data",[]),
+            io:format("Finished gathering data~n"),
             Acc;
         {data, D} ->
-            Acc = Fun(D,Acc),
-            gather_data_from_mappers(Fun,Acc,Missing)
+	    io:format("D is ~p and Acc is ~p. Will compute result.~n",[D,Acc]),
+            Ans = Fun(D,Acc),
+	    io:format("Result of Fun(D,Acc) is ~p~n",[Ans]),
+            gather_data_from_mappers(Fun,Ans,Missing)
     end.
 
 
