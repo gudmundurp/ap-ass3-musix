@@ -97,7 +97,7 @@ coordinator_loop(Reducer, Mappers) ->
         io:format("Sending data to mappers~n"),
         send_data(Mappers, Data),
         coordinator_loop(Reducer, Mappers);
-    {JPid, Result, result} ->
+    {Cid,{JPid, Result, result}} ->
         reply_ok(JPid,Result),
         coordinator_loop(Reducer, Mappers)
     end.
@@ -130,8 +130,7 @@ reducer_loop() ->
         Acc = gather_data_from_mappers(RedFun,RedInit,Mappers),
 	io:format("Got back from gathering~n"),
         reply(Cid,{JPid, Acc, result}),
-        reply(Cid,{self(), stop}),
-        ok
+        reducer_loop()
     end.
 
 gather_data_from_mappers(Fun, Acc, Missing) ->
