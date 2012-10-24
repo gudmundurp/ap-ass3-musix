@@ -18,6 +18,7 @@ stop(Pid) ->
     Pid ! {self(), stop}.
 
 job(CPid, MapFun, RedFun, RedInit, Data) ->
+    io:format("Starting job with data ~p~n", [Data]),
     rpc(CPid,{MapFun, RedFun, RedInit, Data ++ [endOfData], job}).
 
 
@@ -37,9 +38,11 @@ spawn_mappers(N, Reducer, Mappers) ->
 %% synchronous communication
 
 rpc(Pid, Request) ->
+    io:format("Starting rpc with request ~p~n", [Request]),
     Pid ! {self(), Request},
     receive
     {Pid, Response} ->
+        io:format("rpc with request ~p got response ~p~n", [Request,Response]),
         Response
     end.
 
@@ -77,6 +80,7 @@ foreach(_, []) ->
     ok.
 
 coordinator_loop(Reducer, Mappers) ->
+    io:format("Coordinator_loop waiting for message~n"),
     receive
     {From, stop} ->
         io:format("~p stopping~n", [self()]),
@@ -84,8 +88,10 @@ coordinator_loop(Reducer, Mappers) ->
         stop_async(Reducer),
         reply_ok(From);
     {JPid,{MapFun, RedFun, RedInit, Data, job}} ->
+        io:format("Got job with data ~p and RedInit ~p~n",[Data,RedInit]),
         rpc(Reducer,{JPid, RedFun, RedInit, Mappers}),
         foreach(fun(M) -> M ! { MapFun, function } end, Mappers),
+        io:format("Sending data to mappers~n"),
         send_data(Mappers, Data),
         coordinator_loop(Reducer, Mappers);
     {JPid, Result, result} ->
@@ -94,19 +100,25 @@ coordinator_loop(Reducer, Mappers) ->
     end.
 
 send_data(Mappers, Data) ->
+    io:format("Starting data send loop~n"),
     send_loop(Mappers, Mappers, Data).
 
 send_loop(Mappers, [Mid|Queue], [D|Data]) ->
+    io:format("Inside loop, head of data is ~p and rest is ~p~n",[D,Data]),
     data_async(Mid, D),
     send_loop(Mappers, Queue, Data);
-send_loop(_, _, []) -> ok;
+send_loop(_, _, []) -> 
+    io:format("End of data reached, hurray!~n"),
+    ok;
 send_loop(Mappers, [], Data) ->
+    io:format("Refilling Mapper queue~n"),
     send_loop(Mappers, Mappers, Data).
 
 
 %%% Reducer
 
 reducer_loop() ->
+    io:format("Reducer waiting for message~n"),
     receive
     stop -> 
         io:format("Reducer ~p stopping~n", [self()]),
@@ -120,6 +132,7 @@ reducer_loop() ->
     end.
 
 gather_data_from_mappers(Fun, Acc, Missing) ->
+    io:format("Reducer gathering data~n"),
     receive
         {data, endOfData} ->
             io:format("Finish gathering data",[]),
