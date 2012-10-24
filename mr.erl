@@ -18,7 +18,7 @@ stop(Pid) ->
     Pid ! {self(), stop}.
 
 job(CPid, MapFun, RedFun, RedInit, Data) ->
-    CPid ! {MapFun, RedFun, RedInit, Data ++ [endOfData], job}.
+    rpc(CPid,{MapFun, RedFun, RedInit, Data ++ [endOfData], job}).
 
 
 %%%% Internal implementation
@@ -83,16 +83,15 @@ coordinator_loop(Reducer, Mappers) ->
         lists:foreach(fun stop_async/1, Mappers),
         stop_async(Reducer),
         reply_ok(From);
-    {MapFun, RedFun, RedInit, Data, job} ->
-            rpc(Reducer,{ RedFun, RedInit, Mappers}),
-            foreach(fun(M) -> M ! { MapFun, function } end, Mappers),
-            send_data(Mappers, Data),
-            coordinator_loop(Reducer, Mappers);
-    {Result, result} ->
-        io:format("~p~n",Result),
+    {JPid,{MapFun, RedFun, RedInit, Data, job}} ->
+        rpc(Reducer,{JPid, RedFun, RedInit, Mappers}),
+        foreach(fun(M) -> M ! { MapFun, function } end, Mappers),
+        send_data(Mappers, Data),
+        coordinator_loop(Reducer, Mappers);
+    {JPid, Result, result} ->
+        reply_ok(JPid,Result),
         coordinator_loop(Reducer, Mappers)
     end.
-
 
 send_data(Mappers, Data) ->
     send_loop(Mappers, Mappers, Data).
@@ -112,10 +111,10 @@ reducer_loop() ->
     stop -> 
         io:format("Reducer ~p stopping~n", [self()]),
         ok;
-    {Cid, {RedFun,RedInit,Mappers}} ->
+    {Cid, {JPid,RedFun,RedInit,Mappers}} ->
         reply_ok(Cid),
         Acc = gather_data_from_mappers(RedFun,RedInit,Mappers),
-        reply(Cid,{Acc, result}),
+        reply(Cid,{JPid, Acc, result}),
         reply(Cid,{self(), stop}),
         ok
     end.
@@ -148,17 +147,3 @@ mapper_loop(Reducer, Fun) ->
         mapper_loop(Reducer, Fun)
     end.
 
-test_sum() ->
-{ok, MR} = mr:start(3),
-{ok, Sum} = mr:job(MR,
-fun(X) -> X end,
-fun(X,Acc) -> X+Acc end,
-0,
-lists:seq(1,10)),
-{ok, Fac} = mr:job(MR,
-fun(X) -> X end,
-fun(X,Acc) -> X*Acc end,
-1,
-lists:seq(1,10)),
-mr:stop(MR),
-{Sum, Fac}.
