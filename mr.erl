@@ -18,14 +18,10 @@ stop(Pid) ->
     Pid ! {self(), stop}.
 
 job(CPid, MapFun, RedFun, RedInit, Data) ->
-    %io:format("Starting job with data ~p~n", [Data]),
     Ans = rpc(CPid,{MapFun, RedFun, RedInit, Data, job, false}),
-    %io:format("Got back answer: ~p~n",[Ans]),
     Ans.
 job(CPid, MapFun, RedFun, RedInit, Data, debug) ->
-    %io:format("Starting job with data ~p~n", [Data]),
     Ans = rpc(CPid,{MapFun, RedFun, RedInit, Data, job, true}),
-    %io:format("Got back answer: ~p~n",[Ans]),
     Ans.
 
 
@@ -34,7 +30,6 @@ job(CPid, MapFun, RedFun, RedInit, Data, debug) ->
 init(N) -> 
     Reducer = spawn(fun() -> reducer_loop() end),
     Mappers = spawn_mappers(N, Reducer,[]),
-    %io:format("Ammount of Mappers is ~p and inside is ~p~n",[length(Mappers),Mappers]),
     {Reducer,Mappers}.
 
 spawn_mappers(0, _, Mappers) ->
@@ -46,11 +41,9 @@ spawn_mappers(N, Reducer, Mappers) ->
 %% synchronous communication
 
 rpc(Pid, Request) ->
-    %io:format("Starting rpc with request ~p~n", [Request]),
     Pid ! {self(), Request},
     receive
     {Pid, Response} ->
-        %io:format("rpc with request ~p got response ~p~n", [Request,Response]),
         Response
     end.
 
@@ -88,44 +81,36 @@ foreach(_, []) ->
     ok.
 
 coordinator_loop(Reducer, Mappers) ->
-    %io:format("Coordinator_loop waiting for message~n"),
     receive
     {From, stop} ->
-        %io:format("~p stopping~n", [self()]),
+        io:format("~p stopping~n", [self()]),
         lists:foreach(fun stop_async/1, Mappers),
         stop_async(Reducer),
         reply_ok(From);
     {JPid,{MapFun, RedFun, RedInit, Data, job, Debug}} ->
-        %io:format("Got job with data ~p and RedInit ~p~n",[Data,RedInit]),
         foreach(fun(M) -> setup_async(M,MapFun) end, Mappers),
 	spawn(fun() -> send_data(Mappers, Data) end),
         {ok,Result} = rpc(Reducer,{RedFun, RedInit, length(Data), Debug}),
-        %io:format("Result from Reducer was ~p~n", [Result]),
         reply_ok(JPid,Result),
         coordinator_loop(Reducer, Mappers)
     end.
 
 send_data(Mappers, Data) ->
-    %io:format("Starting data send loop~n"),
     send_loop(Mappers, Mappers, Data).
 send_loop(Mappers, [Mid|Queue], [D|Data]) ->
-    %io:format("Inside loop, head of data is ~p and rest is ~p. Amount of mappers left is ~p~n",[D,Data,length(Queue)]),
     data_async(Mid, D),
     send_loop(Mappers, Queue, Data);
-send_loop(_, _, []) -> 
-    %io:format("End of data reached, hurray!~n"),
+send_loop(_, _, []) ->     
     ok;
 send_loop(Mappers, [], Data) ->
-    %io:format("WTF?"),
     send_loop(Mappers, Mappers, Data).
 
-%io:format("Refilling Mapper queue, data is ~p, there are ~p mappers~n",[Data,length(Mappers)]),
 %%% Reducer
 
 reducer_loop() ->
     receive
     stop -> 
-        %io:format("Reducer ~p stopping~n", [self()]),
+        io:format("Reducer ~p stopping~n", [self()]),
         ok;
     {Cid, {RedFun,RedInit,Length,Debug}} ->
         Acc = gather_data_from_mappers(RedFun,RedInit,Length,Debug),
@@ -134,14 +119,11 @@ reducer_loop() ->
     end.
 	
 gather_data_from_mappers(_,   Acc, 0, _) ->
-    %io:format("Got all data, returning Acc: ~p~n",[Acc]), 
     Acc;
 gather_data_from_mappers(Fun, Acc, Missing,Debug) ->
     receive
         {data, D} ->
-	        %io:format("D is ~p and Acc is ~p. Will compute result.~n",[D,Acc]),
             Ans = Fun(D,Acc),
-	        %io:format("Result of Fun(D,Acc) is ~p~n",[Ans]),
 	    if
               (Debug) ->io:format("Missing: ~p~n", [Missing]);
               (true)  -> ok
@@ -155,7 +137,7 @@ gather_data_from_mappers(Fun, Acc, Missing,Debug) ->
 mapper_loop(Reducer, Fun) ->
     receive
     stop -> 
-        %io:format("Mapper ~p stopping~n", [self()]),
+        io:format("Mapper ~p stopping~n", [self()]),
         ok;
     {data, D } ->
         data_async(Reducer,Fun(D)),
@@ -163,7 +145,6 @@ mapper_loop(Reducer, Fun) ->
     { setup, F } ->
         mapper_loop(Reducer,F);
     _ ->
-        %io:format("unknown message: ~p~n",[Unknown]), 
         mapper_loop(Reducer, Fun)
     end.
 
