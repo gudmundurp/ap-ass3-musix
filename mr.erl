@@ -93,9 +93,10 @@ coordinator_loop(Reducer, Mappers) ->
     {JPid,{MapFun, RedFun, RedInit, Data, job}} ->
         %io:format("Got job with data ~p and RedInit ~p~n",[Data,RedInit]),
         foreach(fun(M) -> setup_async(M,MapFun) end, Mappers),
-	    spawn(fun() -> send_data(Mappers, Data) end),
-		Result = rpc(Reducer,{RedFun, RedInit, length(Data)}),
-		reply_ok(JPid,Result),
+	spawn(fun() -> send_data(Mappers, Data) end),
+        {ok,Result} = rpc(Reducer,{RedFun, RedInit, length(Data)}),
+        %io:format("Result from Reducer was ~p~n", [Result]),
+        reply_ok(JPid,Result),
         coordinator_loop(Reducer, Mappers)
     end.
 
@@ -123,17 +124,20 @@ reducer_loop() ->
         ok;
     {Cid, {RedFun,RedInit,Length}} ->
         Acc = gather_data_from_mappers(RedFun,RedInit,Length),
-		reply_ok(Cid, Acc),
+	reply_ok(Cid, Acc),
         reducer_loop()
     end.
 	
-gather_data_from_mappers(_,   Acc, 0) -> Acc;
+gather_data_from_mappers(_,   Acc, 0) ->
+    %io:format("Got all data, returning Acc: ~p~n",[Acc]), 
+    Acc;
 gather_data_from_mappers(Fun, Acc, Missing) ->
     receive
         {data, D} ->
 	        %io:format("D is ~p and Acc is ~p. Will compute result.~n",[D,Acc]),
             Ans = Fun(D,Acc),
 	        %io:format("Result of Fun(D,Acc) is ~p~n",[Ans]),
+	    %io:format("Missing: ~p~n", [Missing]),
             gather_data_from_mappers(Fun,Ans,Missing-1)
     end.
 
