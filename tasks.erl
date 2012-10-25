@@ -22,6 +22,12 @@ get_grepper( WordArr,Tracks,MR ) ->
         IDs
     end.
 
+append_to_dict(_, [], Dict) ->
+    Dict;
+append_to_dict(TrackId, [W1 |Words], Dict) ->
+    NewDict = dict:append(W1, TrackId, Dict),
+    append_to_dict(TrackId, Words, NewDict).
+
 run_tasks() ->
     {Words,Tracks} = read_mxm:from_file("data/mxm_dataset_test.txt"),
     
@@ -56,8 +62,27 @@ run_tasks() ->
 
     io:format("Number of tracks with word 'i': ~p~n",[GrepCount("i")]),
     io:format("Number of tracks with word 'love' ~p~n",[GrepCount("love")]),
+    io:format("Number of tracks with word 'satan': ~p~n",[GrepCount("satan")]),
+    io:format("Number of tracks with word 'and': ~p~n",[GrepCount("and")]),
     io:format("Number of tracks with word 'hate' ~p~n",[GrepCount("hate")]),
     io:format("Number of tracks with word 'god': ~p~n",[GrepCount("god")]),
-    io:format("Number of tracks with word 'satan': ~p~n",[GrepCount("satan")]),
+    
+    % Task 4
+    {ok, WtoS} = mr:job(MR,
+        fun(Track) ->
+	    {TrackId, _, WordList} = read_mxm:parse_track(Track),
+	    WordIds = lists:flatmap(fun({WordId,_}) -> [WordId] end, WordList),
+	    {TrackId, WordIds}
+	end,
+	fun({TrackId, WordIds}, WordMap) ->
+	   %io:format("Song id: ~p~n", [TrackId]),
+	   append_to_dict(TrackId, WordIds, WordMap)
+	end,
+	dict:new(),
+	Tracks),
+
+    io:format("dict contains ~p~n", [length(dict:fetch(1,WtoS))]),
+
+
     mr:stop(MR).
 

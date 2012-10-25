@@ -5,7 +5,7 @@
 %%%-------------------------------------------------------------------
 -module(mr).
 
--export([start/1, stop/1, job/5]).
+-export([start/1, stop/1, job/5, job/6]).
 
 %%%% Interface
 
@@ -19,7 +19,12 @@ stop(Pid) ->
 
 job(CPid, MapFun, RedFun, RedInit, Data) ->
     %io:format("Starting job with data ~p~n", [Data]),
-    Ans = rpc(CPid,{MapFun, RedFun, RedInit, Data, job}),
+    Ans = rpc(CPid,{MapFun, RedFun, RedInit, Data, job, false}),
+    %io:format("Got back answer: ~p~n",[Ans]),
+    Ans.
+job(CPid, MapFun, RedFun, RedInit, Data, debug) ->
+    %io:format("Starting job with data ~p~n", [Data]),
+    Ans = rpc(CPid,{MapFun, RedFun, RedInit, Data, job, true}),
     %io:format("Got back answer: ~p~n",[Ans]),
     Ans.
 
@@ -90,11 +95,11 @@ coordinator_loop(Reducer, Mappers) ->
         lists:foreach(fun stop_async/1, Mappers),
         stop_async(Reducer),
         reply_ok(From);
-    {JPid,{MapFun, RedFun, RedInit, Data, job}} ->
+    {JPid,{MapFun, RedFun, RedInit, Data, job, Debug}} ->
         %io:format("Got job with data ~p and RedInit ~p~n",[Data,RedInit]),
         foreach(fun(M) -> setup_async(M,MapFun) end, Mappers),
 	spawn(fun() -> send_data(Mappers, Data) end),
-        {ok,Result} = rpc(Reducer,{RedFun, RedInit, length(Data)}),
+        {ok,Result} = rpc(Reducer,{RedFun, RedInit, length(Data), Debug}),
         %io:format("Result from Reducer was ~p~n", [Result]),
         reply_ok(JPid,Result),
         coordinator_loop(Reducer, Mappers)
@@ -122,23 +127,26 @@ reducer_loop() ->
     stop -> 
         %io:format("Reducer ~p stopping~n", [self()]),
         ok;
-    {Cid, {RedFun,RedInit,Length}} ->
-        Acc = gather_data_from_mappers(RedFun,RedInit,Length),
+    {Cid, {RedFun,RedInit,Length,Debug}} ->
+        Acc = gather_data_from_mappers(RedFun,RedInit,Length,Debug),
 	reply_ok(Cid, Acc),
         reducer_loop()
     end.
 	
-gather_data_from_mappers(_,   Acc, 0) ->
+gather_data_from_mappers(_,   Acc, 0, _) ->
     %io:format("Got all data, returning Acc: ~p~n",[Acc]), 
     Acc;
-gather_data_from_mappers(Fun, Acc, Missing) ->
+gather_data_from_mappers(Fun, Acc, Missing,Debug) ->
     receive
         {data, D} ->
 	        %io:format("D is ~p and Acc is ~p. Will compute result.~n",[D,Acc]),
             Ans = Fun(D,Acc),
 	        %io:format("Result of Fun(D,Acc) is ~p~n",[Ans]),
-	    %io:format("Missing: ~p~n", [Missing]),
-            gather_data_from_mappers(Fun,Ans,Missing-1)
+	    if
+              (Debug) ->io:format("Missing: ~p~n", [Missing]);
+              (true)  -> ok
+            end,
+            gather_data_from_mappers(Fun,Ans,Missing-1,Debug)
     end.
 
 
