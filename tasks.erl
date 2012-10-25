@@ -56,70 +56,8 @@ run_tasks() ->
 
     io:format("Number of tracks with word 'i': ~p~n",[GrepCount("i")]),
     io:format("Number of tracks with word 'love' ~p~n",[GrepCount("love")]),
+    io:format("Number of tracks with word 'hate' ~p~n",[GrepCount("hate")]),
     io:format("Number of tracks with word 'god': ~p~n",[GrepCount("god")]),
     io:format("Number of tracks with word 'satan': ~p~n",[GrepCount("satan")]),
-    %io:format("Number of tracks with word 'good' ~p~n",[GrepCount("good")]),
-    %io:format("Number of tracks with word 'evil' ~p~n",[GrepCount("evil")]),
-    %io:format("Number of tracks with word 'love' ~p~n",[GrepCount("love")]),
-    %io:format("Number of tracks with word 'hate' ~p~n",[GrepCount("hate")]),
-
-        {ok,Dictionary} = mr:job(MR,
-        fun( WordIndex ) ->
-            io:format("At word index ~p~n",[WordIndex]),
-            TList = 
-            lists:foldl(fun(Track,TList) ->
-                    {TrackID,_,WordList} = read_mxm:parse_track(Track),
-                        
-                %io:format("At Track ~p~n",[TrackID]),
-
-            Exists = lists:any(
-                fun(W) ->
-                              element(1,W) == WordIndex end,
-                              WordList
-            ),
-                if 
-              ( Exists ) -> [Track|TList];
-                  true       -> TList
-                end
-              end,
-              [],
-              Tracks
-                    ),
-        {WordIndex,Tracks}
-        end,
-            fun( {WordIndex, Tracks}, Dict ) ->
-            dict:store(array:get(WordIndex-1,WordArr), Tracks, Dict)
-            end,
-        dict:new(),
-        lists:seq(1,length(Words))
-    ),
-    io:format("Dictionary computed.~n"),
-
-    GetTC = fun( Word ) ->
-        length(dict:get(Word,Dictionary))
-    end,
-    io:format("Number of tracks with word 'god': ~p~n",[GetTC("god")]),
-    io:format("Number of tracks with word 'satan': ~p~n",[GetTC("satan")]),
-    io:format("Number of tracks with word 'good' ~p~n",[GetTC("good")]),
-    io:format("Number of tracks with word 'evil' ~p~n",[GetTC("evil")]),
-    io:format("Number of tracks with word 'love' ~p~n",[GetTC("love")]),
-    io:format("Number of tracks with word 'hate' ~p~n",[GetTC("hate")]),
-
-    %{ok,Av_total_song} = mr:job(MR,
-    %    fun( Track ) -> 
-    %       {_,_,WordList} = read_mxm:parse_track(Track),
-    %       io:format("About to call foldl~n"),
-    %       Ans=list:foldl(fun({_,C},Sum)->Sum+C end,0,WordList),
-    %       io:format("Done with MapFun, Ans was: ~p~n",[Ans]),
-    %       Ans
-    %   end,
-    %   fun( Sum, Acc ) -> io:format("Sum is ~p, Acc is ~p~n",[Sum,Acc]),Acc+Sum/L end,
-    %   0,
-    %   Tracks
-    %),
-    %io:format("Average total nr. of words in a song: ~p~n",[Av_total_song]),
-    
-    
-    
     mr:stop(MR).
 
