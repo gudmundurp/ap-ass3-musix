@@ -53,6 +53,19 @@ We also didn't do any kind of error-handling, which would not be acceptable for 
 
 \subsection{Testing}
 
+For testing we did the tasks given in the problem description and we also tested with the \verb=test_sum()= function given in an example. We compared our results from the test computations with other student groups to make sure they were correct.
+
+In the first test we computed the total number of words in all songs together. Our result was a total of $5761183$ words.
+
+In the second test we computed first the average number of different words in a song and the average total number of words in a song. The results were $81$ and $212$ respectively.
+
+In the third test we made a grep function that takes a word and returns a list of tracks that contain the word. To make sure it worked correctly we tested the function with several words and printed out the total number of tracks and compared chosen words with other groups.
+
+In the fourth and last test we computed a reverse index, or a mapping from words to songs where they occur. To verify the results we used the dictionary to look up the   the lists of tracks for the same words we had in the third test and compared their lengths.
+
+\subsection{Discussion on reverse index vs. grep}
+
+The main disadvantage is that the reverse index takes a long time to compute since it's essentially using grep on each word. But once that is done and the dictionary is stored, looking up the lists of tracks takes constant time. The grep will take longer to fetch this list but does however not have to do any initialisation unlike the dictionary method.
 
 \end{document}
 

@@ -33,6 +33,7 @@ run_tasks() ->
     
     {ok, MR} = mr:start(4),
     
+    % Task 1
     {ok, C} = mr:job(MR,
         fun(Track) ->
 	    {_, _, WordList} = read_mxm:parse_track(Track),
@@ -44,9 +45,9 @@ run_tasks() ->
 	),
     io:format("Total number of words: ~p~n",[C]),
 
+    % Task 2
     L = length(Tracks),
-    io:format("Total number of tracks: ~p~n",[L]),
-    
+    io:format("Total number of tracks: ~p~n",[L]),    
     {ok,Av_diff_song} = mr:job(MR,
         fun( Track ) ->
             {_,_,WordList} = read_mxm:parse_track(Track),
@@ -59,6 +60,7 @@ run_tasks() ->
     io:format("Average different words in a song: ~p~n",[Av_diff_song]),
     io:format("Average total number of words in a song: ~p~n", [C/L]),
         
+    % Task 3
     WordArr = array:from_list(Words),
     
     Grep = get_grepper( WordArr, Tracks, MR ),
