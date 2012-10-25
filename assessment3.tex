@@ -23,101 +23,36 @@
 \begin{document}
 \maketitle
 
-\section{The code}
+\section{Assessment}
 
+\subsection{Overview}
 For this assignment we implemented a framework for Map-Reduce and used it for a few tasks.
 
-\subsection{less/2}
-The first predicate we are asked to implement is \verb=less/2=. Our way of implementing this predicate was like so:
-\begin{verbatim}
-less(z, s(_)).
-less(s(X), s(Y)) :- less(X,Y).
-\end{verbatim}
-Where we can see the base case being \verb=less(z, s(_)).= and to check other cases we check recursively if the first term is less than the second term until we reach the base case where we return \verb=true= or another case where the left term is not the only term which is \verb=z= where \verb=false= is returned.
+We followed the design from the skeleton given to us mostly unchanged. We only added a debug parameter to \verb!gather_data_from_mappers!, which we used to print out the progress in the reducer.
 
-\subsection{checkset/1}
-The second predicate we implemented is \verb=checkset/1=:
-\begin{verbatim}
-checkset([_]).
-checkset([X1,X2 | XS]) :- less(X1,X2), checkset([X2|XS]).
-\end{verbatim}
-Here we check if the first two elements of the list are in ascending order with our \verb=less= predicate from above and then we recursively check if the rest of the list is a set by calling \verb=checkset= again. The base case being when the list includes only one element, then it's always a set, no matter which natural number it includes.
+Our frameworks workflow is like this:
 
-\subsection{ismember/3}
-The third predicate we had to implement is \verb=ismember/3=:
-\begin{verbatim}
-ismember(_,[],X2) :- X2 = no.
-ismember(X,[X|_],X2) :- X2 = yes.
-ismember(X1,[X2|XS],X3) :- notequal(X1,X2,yes), ismember(X1,XS,X3).
-\end{verbatim}
-Where the predicate notequal/3 is defined as:
-\begin{verbatim}
-notequal(X,X,Ans) :- Ans = no.
-notequal(X,Y,Ans) :- less(X,Y), Ans = yes.
-notequal(X,Y,Ans) :- less(Y,X), Ans = yes.
-\end{verbatim}
-In ismember/3 we check if the head of a list is the number we have in the first parameter. If that is not the case we recursively ask if the number is a member of the rest of the list. The base case here being when we ask if a number is a member of the empty list, which always returns \verb!X2=no!. Here we also demonstrate the following execution:
-\begin{verbatim}
-?- ismember(N, [s(z), s(s(s(z)))], A).
-N = s(z),
-A = yes ;
-N = z,
-A = no ;
-N = s(s(s(z))),
-A = yes ;
-N = s(s(z)),
-A = no ;
-N = s(s(s(s(_G454)))),
-A = no.
-\end{verbatim}
-Here Prolog will try to match the query with the left-side of facts defined for ismember/3, starting with the first one. It will then try to satisfy that fact, and if it does, it brings back the values of the variables. It also keeps track of whether it found any alternatives. It finds alternative solutions using backtracking.
+\begin{enumerate}
+\item User calls the \verb!start! function. Mappers, Reducer and Coordinator are started with no functions or input data.
+\item User calls job, which does an rpc call to the Coordiantor with all initialization data and waits for an answer. 
+\item Coordinator sends map function to all the mappers and spawns a node that feeds data to them with \verb!send_data!.
+\item Coordinator does a rpc call to the Reducer with reducer function, initial accumulator value and datalength and waits for an answer from Reducer.
+\item Reducer goes into gather data mode. It now starts receiving data asyncroniously from the Mappers and supplies it to the Reduce function.
+\item When Reducer knows that all data has been received and reduced (datalength counter goes to 0), it goes back to its initial mode and replies to the Coordinator with the return value.
+\item Coordinator receives return value and sends to job function
+\item job function sends value back to user.
+\item User goes back to step 2 or calls the stop function, which kills the Mappers, Reducer and Coordinator.
+\end{enumerate}
 
-It starts trying to match on the first fact, but obviously cannot create a match and therefore fails. Then it proceeds onto the next fact and finds a match where \verb!X = s(z)! and \verb!N = s(z)!. Next it looks at the right side, which is \verb!X2=yes!, and finds the match \verb!A=yes!.
+\subsection{Quality of code}
+We think our solution is simple and robust. We haven't run into any problems with our current version of the Map-Reduce framework with any of our tests. 
 
-Prolog checks whether there is an alternative solution for the second fact. That is obviously not the case, since \verb=X= cannot be anything other than \verb=s(z)=. It then proceeds to match on the head of the third fact and finds the match \verb!X1=N!, \verb!X2=s(z)!,\verb!X3=A!. In order to solve the body of the third fact it has to solve the two subgoals \verb=notequal(X1,X2,yes)= and \verb=ismember(X1,XS,X3)=. It matches on the second fact for notequal/3 with \verb!X=X1! and \verb!Y=s(z)!, and inside the body we again have two subgoals. For the first subgoal we match on the first fact of less/2, giving us \verb!X=z! and \verb!Y=s(_), and we then get \verb!Ans=true! from the second subgoal. We return to the original goal and we get that \verb!X1=z!. Finally we do a recursive call to ismember and match on the first rule, giving us a no for X3. Now we have found the second values for N and A, since \verb!X1=N! and \verb!X3=A!.
+Some jobs naturally take longer than others. We have however not detected if there are bottlenecks as we did not measure execution time of individual parts of our framework.
 
-Now Prolog looks for a third solution. It finds a new solution by looking at the subgoal \verb=ismember(X1,XS,X3)= first. Here it matches on the head of the second fact and we get that \verb=X1= equals the head of \verb=XS= and we get that \verb!X1=s(s(s(z)))! and that \verb!X3=yes!. We now solve the subgoal \verb=notequal(X1,X2,yes)= and find no solutions for the first two facts, and we satisfy the third one, giving us that \verb!X3=yes!.
+We also didn't do any kind of error-handling, which would not be acceptable for a commercial product.
 
-We can see that when we found our second solution, we matched on the second fact for \verb=notequal/3=, but we could have chosen the third fact for \verb=ismember/3=. In this case we have two new subgoals to solve, namely \verb=less(Y,X)= and \verb!Ans = yes!. The first subgoal matches on the head of the second rule for less/2, since our Y matches with s(X) with \verb!X=z! and our variable X matches with s(Y), since X can be anything. We recursively go through the second rule for less once, and match on the first rule for less, which states that the second argument has to be at least bigger than the first by one, which is satisfied if the second argument is s(z). We return from the second call and then return from less/2 and get the value \verb!X=s(s(z))!. Finally we return from less with the value \verb!X1=s(s(z))!. We get that \verb!N=s(s(z))! and that \verb!A=no!.
+\subsection{Testing}
 
-Now for the last solution. Note also that in the third solution, in the last step we could have done the recursive call first, instead of the notequal/3. When we do the recursive call for the third time, the list is empty, which means we match on the first rule for ismember/3. Here N can be anything that was not in the original list ( Prolog picked \verb=s(s(s(s(_G454))))= ) and A is no.
-
-\subsection{union/3}
-The fourth predicate we implemented is \verb=union/3=:
-\begin{verbatim}
-union([],X,X).
-union([X1|X],[],[X1|X]).
-union([X1|X1s],[X2|X2s],[X1|X3s]) :-
-        less(X1,X2),
-        union(X1s,[X2|X2s],X3s).
-union([X1|X1s],[X2|X2s],[X2|X3s]) :-
-        less(X2,X1),
-        union([X1|X1s],X2s,X3s).
-union([X|X1s],[X|X2s],[X|X3s]) :-
-        union(X1s,X2s,X3s).
-\end{verbatim}
-Here we take in three lists where the first two are sets and the third one is the union of the two sets. What we do here is check if either of the heads of the two sets is the head of the union. If so we remove the head from the union and the set that contained the head (possibly both sets) and check again. Since the lists are ordered in ascending order we know we can do this. If however neither of the set heads is the head of the union then we know that this union is the wrong one and we return a false. The base cases here are if we have the empty set as the first set and \verb=X= the other or if the first list contains at least one element and the second one is empty.
-
-\subsection{intersection/3}
-The fifth and final predicate we implemented is \verb=intersection/3=:
-\begin{verbatim}
-intersection([],[],[]).
-intersection([],[_|_],[]).
-intersection([_|_],[],[]).
-intersection([X|X1s],[X|X2s],[X|X3s]) :-
-        intersection(X1s,X2s,X3s).
-intersection([X1|X1s],[X2|X2s],X3) :-
-        less(X1,X2),
-        intersection(X1s,[X2|X2s],X3).
-intersection([X1|X1s],[X2|X2s],X3) :-
-        less(X2,X1),
-        intersection([X1|X1s],X2s,X3).
-\end{verbatim}
-This one works more or less like the \verb=union/3= predicate above in the way how we check if the third argument is the intersection of the two given sets. The base cases are where we have two empty sets, or an empty set and a set that contains at least one element. We know the intersection of those two is the empty set.
-
-\section{Assessment of the code}
-
-The code correctness is somewhat talked about in the chapter above. We created some unit tests to make sure things worked as we expected. The unit tests can be found in the \verb=natural.pl=. When developing predicates, we tried to make sure that no duplicates or contradictions can arise in queries. 
 
 \end{document}
 

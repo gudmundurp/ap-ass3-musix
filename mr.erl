@@ -89,7 +89,7 @@ coordinator_loop(Reducer, Mappers) ->
         reply_ok(From);
     {JPid,{MapFun, RedFun, RedInit, Data, job, Debug}} ->
         foreach(fun(M) -> setup_async(M,MapFun) end, Mappers),
-	spawn(fun() -> send_data(Mappers, Data) end),
+        spawn(fun() -> send_data(Mappers, Data) end),
         {ok,Result} = rpc(Reducer,{RedFun, RedInit, length(Data), Debug}),
         reply_ok(JPid,Result),
         coordinator_loop(Reducer, Mappers)
