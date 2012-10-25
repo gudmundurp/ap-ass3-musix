@@ -34,11 +34,14 @@ run_tasks() ->
     {ok, MR} = mr:start(4),
     
     {ok, C} = mr:job(MR,
-        fun( Word ) -> Word end,
-        fun( _, Count ) -> Count+1 end,
-        0,
-        Words
-    ),
+        fun(Track) ->
+	    {_, _, WordList} = read_mxm:parse_track(Track),
+	    lists:foldl(fun({_,X}, Sum) -> X + Sum end, 0, WordList)
+	    end,
+	fun(WordCount, Count) -> Count+WordCount end,
+	    0,
+	    Tracks
+	),
     io:format("Total number of words: ~p~n",[C]),
 
     L = length(Tracks),
@@ -54,6 +57,7 @@ run_tasks() ->
         Tracks
     ),
     io:format("Average different words in a song: ~p~n",[Av_diff_song]),
+    io:format("Average total number of words in a song: ~p~n", [C/L]),
         
     WordArr = array:from_list(Words),
     
@@ -81,8 +85,7 @@ run_tasks() ->
 	dict:new(),
 	Tracks),
 
-    io:format("dict contains ~p~n", [length(dict:fetch(1,WtoS))]),
-
+    io:format("Number of tracks with word 'i' according to the reverse index: ~p~n", [length(dict:fetch(1,WtoS))]),
 
     mr:stop(MR).
 
